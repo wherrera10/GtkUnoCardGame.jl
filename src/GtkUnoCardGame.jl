@@ -56,8 +56,9 @@ popfirst!(ttypes) # only 1 "0" card per color
 const originaldeck = [vec([UnoCard(c, v) for v in ttypes, c in colors]);
       fill(UnoCard("Wild", "Wild"), 4); fill(UnoCard("Wild", "Draw Four"), 4)]
 
-""" challenge flag """
-const challenge = [false]
+""" challenge flags: taken by player, display button """
+const challenge = [false, false]
+
 
 """ Set the next player to play to game.pnow (clockwise or counterclockwise) """
 function nextplayer!(game, idx)
@@ -456,10 +457,12 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
              rectangle(ctx, x0, y0, 40, 40)
              fill(ctx)
         end
-        set_source(ctx, colorant"black")
-        move_to(ctx, challengeposition[1], challengeposition[2])
-        show_text(ctx, "Challenge Draw Four")
-        stroke(ctx)
+        if challenge[end]
+            set_source(ctx, colorant"black")
+            move_to(ctx, challengeposition[1], challengeposition[2])
+            show_text(ctx, "Challenge Draw Four")
+            stroke(ctx)
+        end
         hand = first(game.players).hand
         isempty(hand) && return
         nrow = (length(hand) + 15) ÷ 16
@@ -503,11 +506,14 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
     Gtk.showall(win)
     while !any(i -> isempty(game.players[i].hand), 1:4)
         turn!(game)
-        if type(game.discardpile[end]) == "Draw Four" && game.pnow == 1
+        if startswith(game.players[game.pnow].name, "Play") &&
+            type(game.discardpile[end]) == "Draw Four"
+            challenge[end] = true
             draw(can)
             show(can)
             info_dialog("Choose Challenge to challenge a Draw Four")
             sleep(5)
+            challenge[end] = false
         end
         sleep(2)
         draw(can)
