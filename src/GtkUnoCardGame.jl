@@ -78,7 +78,7 @@ function nextsaiduno(game)
 end
 
 cardscore(c) = (t = type(c); t == "Draw Four" ? 50 : t in cmdtypes ? 20 : parse(Int, t))
-handscore(hand) = sum(cardscore, hand)
+handscore(hand) = isempty(hand) ? 0 : sum(cardscore, hand)
 
 """
     UnoCardGameState(playernames = ["Player", "Bot1", "Bot2", "Bot3"])
@@ -120,7 +120,7 @@ end
 function nextgame(game::UnoCardGameState)
     newgame = UnoCardGameState()
     for i in eachindex(newgame.players)
-        newgame.players[i].score = game.players[i]score
+        newgame.players[i].score = game.players[i].score
     end
     return newgame
 end
@@ -145,6 +145,7 @@ end
 
 """ Current player to draw n cards from the draw pile. """
 function drawcardsfromdeck!(game, n=1)
+    n in [2, 4] && (game.commandsvalid = false)
     if n == 4  # draw four
         # bot will challenge half the time, player must challenge in 5 seconds.
         if game.players[game.pnow].isabot && rand() < 0.5  ||
@@ -171,7 +172,7 @@ function drawcardsfromdeck!(game, n=1)
     logline("Player $(game.players[game.pnow].name) draws $n card$(n == 1 ? "" : "s").")
     for _ in 1:n
         push!(game.players[game.pnow].hand, pop!(game.drawpile))
-        if isempty(game.drawpile)
+        if isempty(game.drawpile)  # out of draw pile
             game.drawpile = shuffle(game.discardpile[begin:end-1])
             game.discardpile = [game.discardpile[end]]
         end
@@ -227,9 +228,12 @@ function turn!(game)
         return
     else  # num card, or command card is already used
         if isempty(indices)
-            drawcardsfromdeck!(game)  # draw, then discard if drawn card is a match
-            indices = playableindices(game)
-            !isempty(indices) && discard!(game, first(indices))
+            drawcardsfromdeck!(game, 1)  # draw, then discard if drawn card is a match
+            indices  = playableindices(game)
+            if !isempty(indices)
+                logline("Drawn card was discardable.")
+                discard!(game, first(indices))
+            end
         elseif !startswith(name, "Bot")  # not bot, so player moves
             logline("Click on a card to play.")
             flushchannel()
@@ -407,7 +411,7 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
     cardpositions = Dict{Int, Vector{Int}}()
     colorpositions = Dict("Red" => [280, 435, 320, 475], "Yellow" => [340, 435, 380, 475],
         "Green" => [400, 435, 440, 475], "Blue" => [460, 435, 500, 475])
-    challengeposition = [300, 492, 470, 482]
+    challengeposition = [300, 475, 470, 465]
     game = UnoCardGameState()
 
     """ Draw the game board on the canvas including player's hand """
@@ -436,17 +440,18 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
         stroke(ctx)
         cairocard(ctx, last(game.discardpile), 350, 240, 40, 80)
         cairodrawfacedowncard(ctx, 410, 240, 40, 80)
-        for (i, p) in enumerate(colorpositions)
-             set_source(ctx, cairocolor[first(p)])
-             x0, y0, x1, y1 = last(p)
-             rectangle(ctx, x0, y0, 40, 40)
-             fill(ctx)
-        end
         if challenge[end]
             set_source(ctx, colorant"black")
             move_to(ctx, challengeposition[1], challengeposition[2])
             show_text(ctx, "Challenge Draw Four")
             stroke(ctx)
+        else
+            for (i, p) in enumerate(colorpositions)
+                set_source(ctx, cairocolor[first(p)])
+                x0, y0, x1, y1 = last(p)
+                rectangle(ctx, x0, y0, 40, 40)
+                fill(ctx)
+            end
         end
         hand = first(game.players).hand
         isempty(hand) && return
@@ -487,8 +492,6 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
     end
 
     for n in 1:1000
-
-
         draw(can)
         Gtk.showall(win)
         while !any(i -> isempty(game.players[i].hand), 1:4)
@@ -497,36 +500,43 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
                 type(game.discardpile[end]) == "Draw Four" && game.commandsvalid
                 challenge[end] = true
                 draw(can)
-                show(can)
+                Gtk.showall(win)
                 info_dialog("Choose Challenge to challenge a Draw Four")
                 sleep(5)
                 challenge[end] = false
             end
             sleep(2)
             draw(can)
-            show(can)
+            Gtk.showall(win)
         end
         winner = findfirst(i -> isempty(game.players[i].hand), 1:length(game.players))
         if type(game.discardpile[end]) == "Draw Two"
-            nextplayer(game)  # next player might have to draw before scoring done
+            nextplayer!(game)  # next player might have to draw before scoring done
             drawcards(game, 2)
         elseif type(game.discardpile[end]) == "Draw Four"
-            nextplayer(game)
+            nextplayer!(game)
             drawcardsfromdeck(game, 2)
             drawcardsfromdeck(game, 2)   # D2 twice because not to be contested as a D4
         end
-        wonpoints = sum(x -> handscore(x.hand), game.players)
-        game.players[winner].score += wonscore
+        roundpoints = sum(x -> handscore(x.hand), game.players)
+        game.players[winner].score += roundpoints
 
-        logline("Player $(game.players[winner].name) wins!")
-        info_dialog(winner == nothing ? "No winner found." :
-            "The WINNER of game $n is $(game.players[winner].name)!\n" *
-            "Winner gains $wonpoints points.", win)
+        logline("Player $(game.players[winner].name) wins round $(n)!")
+        info_dialog("The winner of round $n is $(game.players[winner].name).\n" *
+            "Winner gains $roundpoints points.", win)
+        if any(x -> x.score >= 500, game.players)
+            s = "Game over. Scores:\n\n"
+            for p in game.players
+                s *= "   $(p.name):  $(p.score)  $(p.score >= 500 ? "WINNER!" : "")\n"
+            end
+            info_dialog(s)
+            break
+        end
+        logline("-------------------------\nNew round!\n-----------------------")
+        game = nextgame(game)
+        draw(can)
+        Gtk.showall(win)
     end
-    if any(x -> x.score >= 500, game.players)
-    end
-    game = nextgame(game)
 end
 
 UnoCardGameApp()
-
