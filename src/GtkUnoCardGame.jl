@@ -514,7 +514,7 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
 
         logline("Player $(game.players[winner].name) wins!")
         info_dialog(winner == nothing ? "No winner found." :
-            "The WINNER of game $ is $(game.players[winner].name)!\n" *
+            "The WINNER of game $n is $(game.players[winner].name)!\n" *
             "Winner gains $wonpoints points.", win)
     end
     if any(x -> x.score >= 500, game.players)
