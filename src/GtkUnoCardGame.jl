@@ -77,6 +77,9 @@ function nextsaiduno(game)
     return length(game.players[nextp].hand) == 1
 end
 
+cardscore(c) = (t = type(c); t == "Draw Four" ? 50 : t in cmdtypes ? 20 : parse(Int, t))
+handscore(hand) = sum(cardscore, hand)
+
 """
     UnoCardGameState(playernames = ["Player", "Bot1", "Bot2", "Bot3"])
 Construct and initialize Uno game. Includes dealing hands and picking who is to start.
@@ -523,4 +526,3 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
 end
 
 UnoCardGameApp()
-
