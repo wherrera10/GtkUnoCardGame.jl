@@ -90,7 +90,7 @@ function UnoCardGameState(playernames = ["Player", "Bot1", "Bot2", "Bot3"])
         deck[29:end] .= shuffle(deck[29:end])
     end
     hands = [deck[i:i+6] for i in 1:7:27]
-    game = UnoCardGameState(drawpile, discardpile, [UnoCardGamePlayer(playernames[i],
+    game = UnoCardGameState(drawpile, discardpile, [UnoCardGamePlayer(playernames[i], 0,
         startswith(playernames[i], "Bot") ? true : false, hands[i])
         for i in 1:length(playernames)], 1, "Wild", "Wild", true, true)
     dealer = rand(1:length(playernames))
