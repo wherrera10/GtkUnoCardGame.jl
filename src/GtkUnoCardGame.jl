@@ -508,9 +508,12 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
         end
         winner = findfirst(i -> isempty(game.players[i].hand), 1:length(game.players))
         if type(game.discardpile[end]) == "Draw Two"
-        
+            nextplayer(game)  # next player might have to draw before scoring done
+            drawcards(game, 2)
         elseif type(game.discardpile[end]) == "Draw Four"
-
+            nextplayer(game)
+            drawcardsfromdeck(game, 2)
+            drawcardsfromdeck(game, 2)   # D2 twice because not to be contested as a D4
         end
         wonpoints = sum(x -> handscore(x.hand), game.players)
         game.players[winner].score += wonscore
@@ -526,3 +529,4 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
 end
 
 UnoCardGameApp()
+
