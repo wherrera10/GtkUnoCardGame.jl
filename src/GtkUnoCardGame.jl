@@ -504,9 +504,9 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
             show(can)
         end
         winner = findfirst(i -> isempty(game.players[i].hand), 1:length(game.players))
-        if type(game.discardpile[end]) == "Draw Two")
+        if type(game.discardpile[end]) == "Draw Two"
         
-        elseif type(game.discardpile[end]) == "Draw Four")
+        elseif type(game.discardpile[end]) == "Draw Four"
 
         end
         wonpoints = sum(x -> handscore(x.hand), game.players)
