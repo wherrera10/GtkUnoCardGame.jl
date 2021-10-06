@@ -1,12 +1,15 @@
 using Random, Colors, Gtk, Cairo
 
-#=========== Channel section ===================#
+#=========== Channel and flag (IPC) section ===================#
 
 """ channel, communicates player's mouse choice of card or color to game logic """
 channel = Channel{Any}(100)
 
 """ flush the channel from mouse choice to game logic """
 flushchannel() = while !isempty(channel) take!(channel); end
+
+""" challenge flag: true if challenge taken by player """
+const challenge = [false]
 
 #============ Game play section ==================#
 
@@ -55,10 +58,6 @@ popfirst!(ttypes) # only 1 "0" card per color
 """ The Uno card game deck, unshuffled. """
 const originaldeck = [vec([UnoCard(c, v) for v in ttypes, c in colors]);
       fill(UnoCard("Wild", "Wild"), 4); fill(UnoCard("Wild", "Draw Four"), 4)]
-
-""" challenge flags: taken by player, display button """
-const challenge = [false, false]
-
 
 """ Set the next player to play to game.pnow (clockwise or counterclockwise) """
 function nextplayer!(game, idx)
@@ -158,8 +157,8 @@ function drawcardsfromdeck!(game, n=1)
             indices = playableindices(game)
             hand = game.players[game.pnow].hand
             if any(i -> color(hand[i]) != "Wild", playableindices(game))
-                logline("Challenge sustained! Challenged player draws 4.")
-                drawcardsfromdeck!(game, 4)
+                logline("Challenge sustained! Challenged Draw Four player draws 4.")
+                drawcardsfromdeck!(game, 2); drawcardsfromdeck!(game, 2)
                 game.pnow, game.colornow = challenger, savecolor
                 return
             else
@@ -168,6 +167,7 @@ function drawcardsfromdeck!(game, n=1)
             end
             game.pnow, game.colornow = challenger, savecolor
         end
+        challenge[begin] = false
     end
     logline("Player $(game.players[game.pnow].name) draws $n card$(n == 1 ? "" : "s").")
     for _ in 1:n
@@ -331,6 +331,14 @@ end
 const cairocolor = Dict("Red" => colorant"red", "Yellow" => colorant"gold",
     "Green" => colorant"green", "Blue" => colorant"blue", "Wild" => colorant"black")
 
+function colorbutton(txt::String, clr::String)
+   button = GtkButton(txt)
+   sc = Gtk.GAccessor.style_context(button)
+   pr = Gtk.CssProviderLeaf(data="button {color:$(clr); font-weight: bolder}")
+   push!(sc, Gtk.StyleProvider(pr), 600)
+   return button
+end
+
 """ Draw a UnoCard as a rectangle with rounded corners. """
 function cairocard(ctx, card, x0, y0, width, height, bcolor=colorant"white")
     fcolor = cairocolor[color(card)]
@@ -399,19 +407,30 @@ end
     UnoCardGameApp(w = 800, hcan = 600, hlog = 100)
 Uno card game Gtk app. Draws game on a canvas, logs play on box below canvas.
 """
-function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
-    win = GtkWindow("Uno Card Game", w, hcan + hlog) |> (GtkFrame() |> (vbox = GtkBox(:v)))
-    swin = GtkScrolledWindow()
-    can = GtkCanvas(w, hcan)
-    set_gtk_property!(can, :expand, true)
-    push!(swin, can)
-    push!(vbox, swin)
+function UnoCardGameApp(w = 1120, wcan = 810, h = 700)
+    win = GtkWindow("Uno Card Game", w, h) |> (GtkFrame() |> (hbox = GtkBox(:h)))
+    vbox = GtkBox(:v)
+    can = GtkCanvas(wcan, h)
+    push!(hbox, can)
     push!(vbox, logwindow)  # from log section
+    set_gtk_property!(logwindow, :expand, true)
+    b, g = colorbutton("Blue", "blue"), colorbutton("Green", "green")
+    r, y = colorbutton("Red", "red"), colorbutton("Yellow", "gold")
+    chal = GtkButton("Challenge")
+    signal_connect(w -> push!(channel, "Blue"), b, "clicked")
+    signal_connect(w -> push!(channel, "Green"), g, "clicked")
+    signal_connect(w -> push!(channel, "Red"), r, "clicked")
+    signal_connect(w -> push!(channel, "Yellow"), y, "clicked")
+    signal_connect(w -> (challenge[begin] = true), chal, "clicked")
+    push!(vbox, b, g, r, y, chal)
+    push!(hbox, vbox)
     fontpointsize = w / 50
     cardpositions = Dict{Int, Vector{Int}}()
-    colorpositions = Dict("Red" => [280, 435, 320, 475], "Yellow" => [340, 435, 380, 475],
-        "Green" => [400, 435, 440, 475], "Blue" => [460, 435, 500, 475])
-    challengeposition = [300, 475, 470, 465]
+
+    # announce the rules and penalties per task description
+    info_dialog(unodocshtml, win)
+
+    # create a game instance to start play
     game = UnoCardGameState()
 
     """ Draw the game board on the canvas including player's hand """
@@ -426,7 +445,7 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
         fill(ctx)
         color = colorant"navy"
         set_source(ctx, color)
-        move_to(ctx, 360, 400)
+        move_to(ctx, 360, 420)
         show_text(ctx, game.players[1].name)
         stroke(ctx)
         move_to(ctx, 60, 300)
@@ -440,19 +459,6 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
         stroke(ctx)
         cairocard(ctx, last(game.discardpile), 350, 240, 40, 80)
         cairodrawfacedowncard(ctx, 410, 240, 40, 80)
-        if challenge[end]
-            set_source(ctx, colorant"black")
-            move_to(ctx, challengeposition[1], challengeposition[2])
-            show_text(ctx, "Challenge Draw Four")
-            stroke(ctx)
-        else
-            for (i, p) in enumerate(colorpositions)
-                set_source(ctx, cairocolor[first(p)])
-                x0, y0, x1, y1 = last(p)
-                rectangle(ctx, x0, y0, 40, 40)
-                fill(ctx)
-            end
-        end
         hand = first(game.players).hand
         isempty(hand) && return
         nrow = (length(hand) + 15) ÷ 16
@@ -469,19 +475,6 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
 
     """ Gtk mouse callback: translates valid mouse clicks to a channel item """
     signal_connect(can, "button-press-event") do b, evt
-        if challengeposition[1] < evt.x < challengeposition[3] &&
-            challengeposition[4] < evt.y < challengeposition[2]
-            challenge[begin] = true
-            return
-        end
-        challenge[begin] = false
-        for p in colorpositions
-            x0, y0, x1, y1 = last(p)
-            if x0 < evt.x < x1 && y0 < evt.y < y1
-                push!(channel, first(p))
-                return
-            end
-        end
         for p in cardpositions
             x0, y0, x1, y1 = last(p)
             if x0 < evt.x < x1 && y0 < evt.y < y1
@@ -491,6 +484,7 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
         end
     end
 
+    # do the turns of play in the game, keeping score totals from the rounds
     for n in 1:1000
         draw(can)
         Gtk.showall(win)
@@ -498,12 +492,10 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
             turn!(game)
             if startswith(game.players[game.pnow].name, "Play") &&
                 type(game.discardpile[end]) == "Draw Four" && game.commandsvalid
-                challenge[end] = true
                 draw(can)
                 Gtk.showall(win)
-                info_dialog("Choose Challenge to challenge a Draw Four")
-                sleep(5)
-                challenge[end] = false
+                info_dialog("Click Challenge within 5 seconds to challenge Draw Four")
+                sleep(3)
             end
             sleep(2)
             draw(can)
@@ -512,11 +504,11 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
         winner = findfirst(i -> isempty(game.players[i].hand), 1:length(game.players))
         if type(game.discardpile[end]) == "Draw Two"
             nextplayer!(game)  # next player might have to draw before scoring done
-            drawcards(game, 2)
+            drawcardsfromdeck!(game, 2)
         elseif type(game.discardpile[end]) == "Draw Four"
             nextplayer!(game)
-            drawcardsfromdeck(game, 2)
-            drawcardsfromdeck(game, 2)   # D2 twice because not to be contested as a D4
+            drawcardsfromdeck!(game, 2)
+            drawcardsfromdeck!(game, 2)   # D2 twice because not to be contested as a D4
         end
         roundpoints = sum(x -> handscore(x.hand), game.players)
         game.players[winner].score += roundpoints
@@ -524,6 +516,7 @@ function UnoCardGameApp(w = 864, hcan = 700, hlog = 100)
         logline("Player $(game.players[winner].name) wins round $(n)!")
         info_dialog("The winner of round $n is $(game.players[winner].name).\n" *
             "Winner gains $roundpoints points.", win)
+        logline("Scores: $([x.score for x in game.players])")
         if any(x -> x.score >= 500, game.players)
             s = "Game over. Scores:\n\n"
             for p in game.players
