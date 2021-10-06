@@ -154,9 +154,8 @@ function drawcardsfromdeck!(game, n=1)
             challenger, savecolor = game.pnow, game.colornow
             nextplayer!(game); nextplayer!(game); nextplayer!(game); # prior player
             game.colornow = game.lastcolor
-            indices = playableindices(game)
             hand = game.players[game.pnow].hand
-            if any(i -> color(hand[i]) != "Wild", playableindices(game))
+            if any(c -> color(c) == game.colornow, hand)
                 logline("Challenge sustained! Challenged Draw Four player draws 4.")
                 drawcardsfromdeck!(game, 2); drawcardsfromdeck!(game, 2)
                 game.pnow, game.colornow = challenger, savecolor
