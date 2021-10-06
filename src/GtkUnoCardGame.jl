@@ -3,7 +3,7 @@ using Random, Colors, Gtk, Cairo
 #=========== Channel and flag (IPC) section ===================#
 
 """ channel, communicates player's mouse choice of card or color to game logic """
-channel = Channel{Any}(100)
+const channel = Channel{Any}(100)
 
 """ flush the channel from mouse choice to game logic """
 flushchannel() = while !isempty(channel) take!(channel); end
@@ -14,7 +14,7 @@ const challenge = [false]
 #============ Game play section ==================#
 
 """ The Uno card type. The first field is color, second field is number or command. """
-const UnoCard = Pair{String, String}
+UnoCard = Pair{String, String}
 color(c::UnoCard) = first(c)
 type(c::UnoCard) = last(c)
 
@@ -331,6 +331,7 @@ end
 const cairocolor = Dict("Red" => colorant"red", "Yellow" => colorant"gold",
     "Green" => colorant"green", "Blue" => colorant"blue", "Wild" => colorant"black")
 
+""" CSS style button for bold colored text """
 function colorbutton(txt::String, clr::String)
    button = GtkButton(txt)
    sc = Gtk.GAccessor.style_context(button)
@@ -461,12 +462,12 @@ function UnoCardGameApp(w = 1120, wcan = 810, h = 700)
         cairodrawfacedowncard(ctx, 410, 240, 40, 80)
         hand = first(game.players).hand
         isempty(hand) && return
-        nrow = (length(hand) + 15) ÷ 16
+        nrow = (length(hand) + 15) ÷ 15
         for row in 1:nrow
-            cards = hand[(row - 1) * 16 + 1 : min(length(hand), row * 16 - 1)]
-            startx, starty = 40 + (16 - length(cards)) * 20, 500 + 85 * (row - 1)
+            cards = hand[(row - 1) * 15 + 1 : min(length(hand), row * 15 - 1)]
+            startx, starty = 40 + (15 - length(cards)) * 20, 500 + 85 * (row - 1)
             for (i, card) in enumerate(cards)
-                idx, x0 = (row - 1) * 16 + i, startx + 50 * (i - 1)
+                idx, x0 = (row - 1) * 15 + i, startx + 50 * (i - 1)
                 cardpositions[idx] = [x0, starty, x0 + 40, starty + 80]
                 cairocard(ctx, card, x0, starty, 40, 80)
             end
