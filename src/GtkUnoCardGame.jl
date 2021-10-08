@@ -93,7 +93,7 @@ function UnoCardGameState(playernames = ["Player", "Bot1", "Bot2", "Bot3"])
     end
     hands = [deck[i:i+6] for i in 1:7:27]
     game = UnoCardGameState(drawpile, discardpile, [UnoCardGamePlayer(playernames[i], 0,
-        startswith(playernames[i], "Bot") ? true : false, hands[i])
+        startswith(playernames[i], "Bot"), hands[i])
         for i in 1:length(playernames)], 1, "Wild", "Wild", true, true)
     dealer = rand(1:length(playernames))
     logline("Player $(playernames[dealer]) is dealer.")
@@ -148,7 +148,7 @@ function drawcardsfromdeck!(game, n=1)
     if n == 4  # draw four
         # bot will challenge half the time, player must challenge in 5 seconds.
         if game.players[game.pnow].isabot && rand() < 0.5  ||
-            (!game.players[game.pnow].isabot && challenge[begin] == true)
+            (!game.players[game.pnow].isabot && challenge[begin])
             challenge[begin] = false
             logline("$(game.players[game.pnow].name) challenged Draw Four!")
             challenger, savecolor = game.pnow, game.colornow
