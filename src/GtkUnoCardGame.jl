@@ -427,9 +427,6 @@ function UnoCardGameApp(w = 1120, wcan = 810, h = 700)
     fontpointsize = w / 50
     cardpositions = Dict{Int, Vector{Int}}()
 
-    # announce the rules and penalties per task description
-    info_dialog(unodocshtml, win)
-
     # create a game instance to start play
     game = UnoCardGameState()
 
@@ -488,6 +485,7 @@ function UnoCardGameApp(w = 1120, wcan = 810, h = 700)
     for n in 1:1000
         draw(can)
         Gtk.showall(win)
+        n == 1 && info_dialog(unodocshtml)  # at start, announce the rules and penalties per task description                                       
         while !any(i -> isempty(game.players[i].hand), 1:4)
             turn!(game)
             if startswith(game.players[game.pnow].name, "Play") &&
